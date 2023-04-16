@@ -3,7 +3,7 @@ import os
 import math
 
 
-def radial_offset(image_size, xy, padding=16):
+def radial_offset(image_size:int, xy:tuple, padding:int=16) -> tuple:
     radius = (image_size / 2)
     r = xy[1] / 255 * radius
     theta = xy[0] / 255 * 2*math.pi
@@ -12,7 +12,7 @@ def radial_offset(image_size, xy, padding=16):
     return x, y
 
 
-def normal_offset(image_size, xy, padding=16):
+def normal_offset(image_size:int, xy:tuple, padding:int=16) -> tuple:
     remap = lambda v, OldMin, OldMax, NewMin, NewMax: (((v - OldMin) * (NewMax - NewMin)) / (OldMax - OldMin)) + NewMin
     new_min = 0 + padding
     new_max = image_size - padding*2
@@ -26,8 +26,11 @@ def make_image(folder:str, output:str, image_size:str = 1024, sort_type:int = 0,
     0 = hue & saturation \n
     1 = saturation & value \n
     2 = hue & value"""
-    dirr = f"./{folder}"
-    assert os.path.exists(dirr), f"ERROR: Folder '{dirr}' does not exist"
+    
+    if not os.path.exists(folder): 
+        print(f"ERROR: Folder '{folder}' does not exist")
+        input()
+        assert False
     
     # Create a list to store the image data for each image
     images = []
@@ -36,7 +39,6 @@ def make_image(folder:str, output:str, image_size:str = 1024, sort_type:int = 0,
         for image_path in directory:
             # Skip non-image files
             if not image_path.endswith('.png') or image_path.endswith('.jpg'): continue
-            
             image = Image.open(image_path)
 
             # Skip images that are not 16x16
@@ -69,14 +71,15 @@ def make_image(folder:str, output:str, image_size:str = 1024, sort_type:int = 0,
             result_hs = Image.open(os.path.join('', output))
             print("Opening existing image")
         except:
-            result_hs = Image.new('RGBA', (image_size, image_size), color=(50,50,50,0))
+            result_hs = Image.new('RGBA', (image_size, image_size), color=0)
             print('Creating new image')
     
     if sort_type == 'hs':
         draw = ImageDraw.Draw(result_hs)
         draw.ellipse((0,0,image_size,image_size), fill=(50,50,50))
     else:
-        result_hs = Image.new('RGBA', (image_size, image_size), color=(50,50,50,255))
+        draw = ImageDraw.Draw(result_hs)
+        draw.rectangle((0,0,image_size,image_size), fill=(50,50,50))
     
     for image_data in images:
         file_image = Image.new('RGBA', (16, 16), image_data[0]) #avarage color
@@ -115,19 +118,21 @@ def valid_input(text, default):
     if not var: 
         print(f"Using default value: {default}")
         var = default
-    # Input type
-    input_type = type(default).__name__
-    # Try to convert input to correct type (ex. folder name with spaces)
-    try: 
-        var = eval(f"{input_type}('{var}')")           
+    # Return folder if it exists
+    if os.path.isdir(var): 
+        return var
+    # Try to convert str to int to correct type
+    if type(default) == int: 
+        try: return int(var)
+        except: pass
     # Try again if input is invalid
-    except: 
-        print(f"ERROR: Invalid input, expected type: <{type(123).__name__}>\n")
+    if type(var) != type(default):
+        print(f"ERROR: Invalid input: '{var}'\n")
         return valid_input(text, default)
     return var
 
 print("\n")
-folder = valid_input("Folder name", "textures")
+folder = valid_input("Folder name", "./")
 image_size = valid_input("Output image size", 1024)
 stepsize = valid_input("Step size", 1)
 
