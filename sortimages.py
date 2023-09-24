@@ -21,18 +21,8 @@ def normal_offset(image_size:int, xy:tuple, padding:int=16) -> tuple:
     return x, y
 
 
-def make_image(folder:str, output:str, image_size:str = 1024, sort_type:int = 0, step:int = 0, replace = True):
-    """Sort type: \n
-    0 = hue & saturation \n
-    1 = saturation & value \n
-    2 = hue & value"""
-    
-    if not os.path.exists(folder): 
-        print(f"ERROR: Folder '{folder}' does not exist")
-        input()
-        assert False
-    
-    # Create a list to store the image data for each image
+def image_list(folder:str) -> list:
+    """Create a list to store the image data for each image"""
     images = []
     for root, dirs, files in os.walk(folder):
         directory = [os.path.join(root, name) for name in files]
@@ -48,37 +38,61 @@ def make_image(folder:str, output:str, image_size:str = 1024, sort_type:int = 0,
             if 0 in list(zip(*list(zip(*image.convert('RGBA').getcolors()))[1]))[-1]: continue
             
             # Convert to HSV 
-            image = image.convert('HSV')
-            image_colors = image.getcolors()
-            colors = []
-            for color in image_colors:
-                if color[1] == (0, 0, 0): continue
+            image_rgba = image.convert('RGBA').getcolors()
+            image_hsv = image.convert('HSV').getcolors()
+            hsv = []
+            rgba = []
+            if "debug" in image_path: continue
+
+            
+            rgba = [color[1] for color in image_rgba for i in range(color[0])]
+            hsv = [color[1] for color in image_hsv for i in range(color[0])]
+                    
+            average_rgba = tuple(int(sum(color)/len(color)) for color in list(zip(*rgba)))
+            average_hsv = tuple(int(sum(color)/len(color)) for color in list(zip(*hsv)))
                 
-                for i in range(color[0]): colors.append(color[1])   # Amount of similar pixels matter
-                # colors.append(color[1])                           # Amount of similar pixels don't matter
+            # for color in image_hsv:
+            #     # print("--",color[0])
+            #     if color[1] == (0, 0, 0): continue
                 
-            average_color = tuple(int(sum(color)/len(color)) for color in list(zip(*colors)))
-            images.append((average_color, image_path))
+            #     for i in range(color[0]): hsv.append(color[1])   # Amount of similar pixels matter
+            #     # hsv.append(color[1])                           # Amount of similar pixels don't matter
+            average_hsv = tuple(int(sum(color)/len(color)) for color in list(zip(*hsv)))
+            images.append((average_hsv, image_path, average_rgba))
+    return images
+
+def make_image(folder:str, output:str, image_size:str = 1024, sort_type:int = 0, step:int = 0, replace = True):
+    """Sort type: \n
+    0 = hue & saturation \n
+    1 = saturation & value \n
+    2 = hue & value"""
+    
+    if not os.path.exists(folder): 
+        print(f"ERROR: Folder '{folder}' does not exist")
+        input()
+        assert False
+    
+    images = image_list(folder)
             
     # Create a new image to hold the sorted images
     if replace:
-        result_hs = Image.new('RGBA', (image_size, image_size), color=0)
+        image_result = Image.new('RGBA', (image_size, image_size), color=0)
         print('Creating image..')
         
     # Look for existing image, if it exists, open it, if not, create a new one
     else:
         try: 
-            result_hs = Image.open(os.path.join('', output))
+            image_result = Image.open(os.path.join('', output))
             print("Opening existing image")
         except:
-            result_hs = Image.new('RGBA', (image_size, image_size), color=0)
+            image_result = Image.new('RGBA', (image_size, image_size), color=0)
             print('Creating new image')
     
     if sort_type == 'hs':
-        draw = ImageDraw.Draw(result_hs)
+        draw = ImageDraw.Draw(image_result)
         draw.ellipse((0,0,image_size,image_size), fill=(50,50,50))
     else:
-        draw = ImageDraw.Draw(result_hs)
+        draw = ImageDraw.Draw(image_result)
         draw.rectangle((0,0,image_size,image_size), fill=(50,50,50))
     
     for image_data in images:
@@ -102,11 +116,30 @@ def make_image(folder:str, output:str, image_size:str = 1024, sort_type:int = 0,
             elif sort_type == 'hv':
                 return stepxy(*normal_offset(image_size, (hue, value)))
         
-        result_hs.paste(file_image, set_xy())
+        image_result.paste(file_image, set_xy())
 
     # Save the result image
-    result_hs.save(output)
+    image_result.save(output)
     print(f" - Done")
+
+def make_image_flat(folder:str, output:str):
+    if not os.path.exists(folder): 
+        print(f"ERROR: Folder '{folder}' does not exist")
+        input()
+        assert False
+        
+    images = image_list(folder)
+    image_avarage = Image.new('RGBA', (16*len(images), 16), color=0)
+    image_original = Image.new('RGBA', (16*len(images), 16), color=0)
+    
+    for i, image in enumerate(images):
+        image_avarage.paste(image[2],(i*16, 0, i*16+16, 16))
+        image_original.paste(Image.open(image[1]), (i*16, 0))
+        
+    image_avarage.save(output.replace('.png', '_avarage.png'))
+    image_original.save(output.replace('.png', '_original.png'))
+    print('Done')
+    input()
 
 
 def valid_input(text, default):
@@ -132,10 +165,22 @@ def valid_input(text, default):
     return var
 
 print("\n")
-folder = valid_input("Folder name", "./")
-image_size = valid_input("Output image size", 1024)
-stepsize = valid_input("Step size", 1)
+mode = valid_input("Mode (0 - Palette, 1 - Flat)", 0)
 
-make_image(folder=folder, output='./sorted_hs.png', image_size=image_size, sort_type='hs', step=stepsize, replace=True)
-make_image(folder=folder, output='./sorted_sv.png', image_size=image_size, sort_type='sv', step=stepsize, replace=True)
-make_image(folder=folder, output='./sorted_hv.png', image_size=image_size, sort_type='hv', step=stepsize, replace=True)
+    
+if mode == 0:
+    folder = valid_input("Folder name", "./")
+    image_size = valid_input("Output image size", 1024)
+    stepsize = valid_input("Step size", 1)
+
+    make_image(folder=folder, output='./sorted_hs.png', image_size=image_size, sort_type='hs', step=stepsize, replace=True)
+    make_image(folder=folder, output='./sorted_sv.png', image_size=image_size, sort_type='sv', step=stepsize, replace=True)
+    make_image(folder=folder, output='./sorted_hv.png', image_size=image_size, sort_type='hv', step=stepsize, replace=True)
+
+elif mode == 1:
+    folder = valid_input("Folder name", "./")
+    make_image_flat(folder, './sorted_flat.png')
+    
+else:
+    print("ERROR: Invalid mode (Use 0 or 1))\n")
+    mode = valid_input("Mode (0 - Palette, 1 - Flat)", 0)
